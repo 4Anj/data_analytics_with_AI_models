@@ -47,7 +47,7 @@ Sentence Transformers
 
 ---
 
-## How to Run
+### How to Run
 
 1. **Clone or download the repository**
 
@@ -57,6 +57,8 @@ Sentence Transformers
 pip install -r requirements.txt
 ```
 ---
-## Run the app
+### Run the app
+```bash
 streamlit run app.py
+```
 
