@@ -1,129 +1,109 @@
 # app.py
-import os
-import pandas as pd
 import streamlit as st
+import pandas as pd
 import plotly.express as px
-from langchain.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.llms import HuggingFacePipeline
-from langchain.chains import RetrievalQA
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.docstore.document import Document
-from transformers import pipeline
+import re
+from calendar import month_name
 
+st.set_page_config(page_title="SmartViz: Ask Your Data", layout="wide")
+st.title("📊 SmartViz: Ask Your Data")
 
-df = pd.read_csv(r"C:\Users\anjan\Downloads\Chocolate Sales.csv")
-df["Amount"] = df["Amount"].replace(r"[\$,]", "", regex=True).astype(float)
-df["Date"] = pd.to_datetime(df["Date"], format="%d-%b-%y")
-df["Year"] = df["Date"].dt.year
-df["Quarter"] = df["Date"].dt.quarter
-df["Month"] = df["Date"].dt.month
-df["Day"] = df["Date"].dt.day
+# 📁 Upload CSV
+st.sidebar.header("Upload your CSV")
+uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type=["csv"])
 
-st.sidebar.title("Filters")
-selected_year = st.sidebar.multiselect("Select Year", sorted(df["Year"].unique()), default=df["Year"].unique())
-selected_country = st.sidebar.multiselect("Select Country", df["Country"].unique(), default=df["Country"].unique())
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    st.success("✅ Data loaded successfully!")
 
-filtered_df = df[df["Year"].isin(selected_year) & df["Country"].isin(selected_country)]
+    # 🧠 Select Columns
+    st.sidebar.header("Select Key Columns")
+    date_col = st.sidebar.selectbox("📅 Date Column", df.columns, index=0)
+    numeric_col = st.sidebar.selectbox("🔢 Numeric Column", df.select_dtypes("number").columns)
 
-st.title("🍫 Chocolate Sales Analytics Dashboard")
-
-
-if not filtered_df.empty:
-    total_revenue = filtered_df["Amount"].sum()
-    total_boxes = filtered_df["Boxes Shipped"].sum()
-    top_product = filtered_df.groupby("Product")["Amount"].sum().idxmax()
-
-    st.metric("Total Revenue", f"${total_revenue:,.2f}")
-    st.metric("Total Boxes Shipped", f"{total_boxes}")
-    st.metric("Top Product by Revenue", top_product)
-else:
-    st.warning("⚠️ No data available for the selected filters.")
-
-
-st.subheader("Revenue by Month")
-fig1 = px.bar(filtered_df, x="Month", y="Amount", color="Country", barmode="group")
-st.plotly_chart(fig1, use_container_width=True)
-
-st.subheader("Revenue by Product")
-fig2 = px.pie(filtered_df, names="Product", values="Amount")
-st.plotly_chart(fig2, use_container_width=True)
-
-st.sidebar.write("Filtered Rows:", len(filtered_df))
-st.sidebar.dataframe(filtered_df.head())
-
-
-st.subheader("Ask a Question about the Sales Data")
-
-# --- Step 1: Create documents from filtered DataFrame
-def create_docs(df):
-    docs = []
-    for _, row in df.iterrows():
-        text = f"Date: {row['Date'].date()}, Country: {row['Country']}, Product: {row['Product']}, Boxes: {row['Boxes Shipped']}, Amount: ${row['Amount']}"
-        docs.append(Document(page_content=text))
-    return docs
-
-# --- Step 2: Load vectorstore with sentence-transformers
-@st.cache_resource
-def load_vectorstore():
-    persist_dir = "./choco_vector_db"
-    os.makedirs(persist_dir, exist_ok=True)
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    docs = create_docs(df)
-
-    if os.path.exists(os.path.join(persist_dir, "index")):
-        return Chroma(persist_directory=persist_dir, embedding_function=embeddings)
-    else:
-        text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        split_docs = text_splitter.split_documents(docs)
-        vectordb = Chroma.from_documents(split_docs, embeddings, persist_directory=persist_dir)
-        vectordb.persist()
-        return vectordb
-
-vectorstore = load_vectorstore()
-
-# --- Step 3: Load lightweight QA model locally
-@st.cache_resource
-def load_qa_chain():
-    hf_qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
-    llm = HuggingFacePipeline(pipeline=hf_qa_pipeline)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-    return RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
-
-qa_chain = load_qa_chain()
-
-# --- Step 4: Add logic-based fallback
-def logic_answer(question, df):
-    q = question.lower()
+    # Preprocess Date & Time
     try:
-        if "total revenue" in q:
-            return f"${df['Amount'].sum():,.2f}"
-        if "boxes" in q:
-            return f"{df['Boxes Shipped'].sum()} boxes"
-        if "top product" in q:
-            return df.groupby("Product")["Amount"].sum().idxmax()
-        if "top country" in q or "most revenue" in q:
-            return df.groupby("Country")["Amount"].sum().idxmax()
-        for country in df['Country'].unique():
-            if country.lower() in q:
-                rev = df[df['Country'] == country]['Amount'].sum()
-                return f"${rev:,.2f} from {country}"
-        return None
-    except:
-        return None
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df["Year"] = df[date_col].dt.year
+        df["Quarter"] = df[date_col].dt.quarter
+        df["Month"] = df[date_col].dt.month_name()
+        df["Month_Num"] = df[date_col].dt.month
+        df["Day"] = df[date_col].dt.day
+    except Exception as e:
+        st.error(f"❌ Date parsing error: {e}")
 
-# --- Step 5: User input
-question = st.text_input("Ask your question:")
+    st.subheader("📋 Dataset Preview")
+    st.dataframe(df.head())
 
+    # 📊 KPIs
+    st.subheader("📊 Key Performance Indicators")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total", f"{df[numeric_col].sum():,.2f}")
+    col2.metric("Average", f"{df[numeric_col].mean():,.2f}")
+    col3.metric("Max", f"{df[numeric_col].max():,.2f}")
+    col4.metric("Min", f"{df[numeric_col].min():,.2f}")
+
+    # 📈 Monthly Chart
+    df["Month_Period"] = df[date_col].dt.to_period("M").astype(str)
+    monthly_data = df.groupby("Month_Period")[numeric_col].sum().reset_index()
+    st.subheader("📅 Monthly Trend")
+    fig = px.line(monthly_data, x="Month_Period", y=numeric_col, markers=True)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 🧠 Custom Logic Q&A
+    st.subheader("🤖 Ask Time-Based Questions About Your Data")
+
+    # Mapping
+    month_map = {m.lower(): m for m in month_name if m}
+    quarters = {
+        "q1": [1, 2, 3],
+        "q2": [4, 5, 6],
+        "q3": [7, 8, 9],
+        "q4": [10, 11, 12]
+    }
+
+    def logic_answer(q):
+        q = q.lower()
+        try:
+            year_match = re.search(r"(20\d{2})", q)
+            year = int(year_match.group()) if year_match else None
+
+            # Check for month name
+            month = next((m for m in month_map if m in q), None)
+            quarter = next((qtr for qtr in quarters if qtr in q), None)
+
+            filtered_df = df.copy()
+            if year:
+                filtered_df = filtered_df[filtered_df["Year"] == year]
+            if month:
+                filtered_df = filtered_df[filtered_df["Month"].str.lower() == month]
+            if quarter:
+                filtered_df = filtered_df[filtered_df["Month_Num"].isin(quarters[quarter])]
+                filtered_df = filtered_df[filtered_df["Month"].str.lower() == month]
+            if quarter:
+                filtered_df = filtered_df[filtered_df["Month_Num"].isin(quarters[quarter])]
+
+            if filtered_df.empty:
+                return "⚠️ No data found for that time period."
+
+            if "total" in q or ("sum" in q and "average" not in q):
+                return f"🧾 Total {numeric_col} in selected period: {filtered_df[numeric_col].sum():,.2f}"
+            if "average" in q or "mean" in q:
+                return f"📊 Average {numeric_col}: {filtered_df[numeric_col].mean():,.2f}"
+            if "max" in q or "highest" in q:
+                return f"📈 Max {numeric_col}: {filtered_df[numeric_col].sum():,.2f}"
+            if "min" in q or "lowest" in q:
+                return f"📉 Min {numeric_col}: {filtered_df[numeric_col].sum():,.2f}"
+            if "daily" in q:
+                daily = filtered_df.groupby(filtered_df[date_col].dt.date)[numeric_col].sum()
+                return daily.to_string()
+
+            return "⚠️ I only answer time-based questions like totals or averages for months, quarters, or years."
+        except Exception as e:
+            return f"❌ Error answering question: {str(e)}"
+
+# ✅ Text input to ask question
+question = st.text_input("Ask your question (e.g., total in April 2022, average in Q1, etc.):")
 if question:
-    with st.spinner("Thinking..."):
-        answer = logic_answer(question, filtered_df)
-        if answer:
-            st.success(f"**Answer:** {answer}")
-        else:
-            try:
-                result = qa_chain.run(question)
-                st.success(f"**Answer:** {result}")
-            except Exception as e:
-                st.warning("I don't know the answer to that. Please ask something related to chocolate sales.")
-   
+    response = logic_answer(question)
+    st.success(response)
