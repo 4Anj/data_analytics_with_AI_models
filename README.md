@@ -23,6 +23,12 @@ SmartViz is a dynamic and intelligent data analysis dashboard built using Stream
   - Month
   - Quarter
   - Daily
+- Upload your dataset (must contain a date column and a numeric column).
+---
+### Limitations
+The Q&A system only supports time-based aggregation questions.
+
+No support for categorical breakdowns (e.g., by product or region) yet.
 
 ---
 
