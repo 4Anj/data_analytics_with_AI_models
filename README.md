@@ -1,49 +1,28 @@
-# Chocolate Sales Analytics Dashboard + AI Q&A
+# SmartViz: Ask Your Data
 
-This is an interactive Streamlit dashboard for analyzing chocolate sales data, with a built-in **AI-powered Q&A assistant**. It lets users ask **natural language questions** about sales, products, and revenue, and get accurate answers based on real data using a **hybrid logic + AI pipeline**.
+SmartViz is a dynamic and intelligent data analysis dashboard built using Streamlit. It allows users to upload **any CSV file** that includes a date column and at least one numeric column, and then:
 
----
-## Technologies Used
-Streamlit
-
-Pandas
-
-Plotly
-
-Transformers
-
-LangChain
-
-ChromaDB
-
-Sentence Transformers
+- Visualizes time-based trends
+- Displays key KPIs (Total, Average, Max, Min)
+- Answers simple time-based questions (like "total in April 2022" or "average in Q1")
 
 ---
 
 ## Features
 
-### Data Analytics
-- **Year and Country filters**
-- Monthly revenue bar chart
-- Product-wise revenue pie chart
-- Live KPIs:
-  - Total Revenue
-  - Total Boxes Shipped
-  - Top Product by Revenue
----
-
-### AI Q&A Assistant (Hybrid)
-- Built-in question answering using:
-  - **Logic rules** for known queries (faster + 100% accurate)
-  - **Retrieval-Augmented Generation (RAG)** for open-ended Q&A using:
-    - `sentence-transformers` for document embeddings
-    - `Chroma` vector DB for retrieval
-    - `distilbert-base-cased-distilled-squad` as a local QA model
-
-> Example Questions:
-> - What is the total revenue?
-> - Which country had the highest revenue?
-> - What product sold the most in 2022?
+- Upload your own CSV file
+- Automatically detect date and numeric columns
+- Generate visualizations like line charts for monthly trends
+- Ask questions such as:
+  - `What is the total in April?`
+  - `Give the average in 2022`
+  - `Max in Q1`
+  - `Min in March 2023`
+- Supports filtering by:
+  - Year
+  - Month
+  - Quarter
+  - Daily
 
 ---
 
